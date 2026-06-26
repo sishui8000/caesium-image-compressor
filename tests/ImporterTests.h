@@ -16,6 +16,7 @@ private slots:
     static void initTestCase();
     static void cleanupTestCase();
     static void rootFolderTestCase();
+    static void scanDirectoryIncludesBmpTestCase();
 
 };
 

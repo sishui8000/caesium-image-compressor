@@ -109,12 +109,13 @@ bool CImage::preview(const CompressionOptions& compressionOptions) const
 {
     QString inputFullPath = this->fullPath;
     QFileInfo inputFileInfo(inputFullPath);
-    QString outputFullPath = this->getTemporaryPreviewFullPath();
+    QString outputFullPath = this->getTemporaryPreviewFullPath(compressionOptions.optionsHash);
     if (outputFullPath.isEmpty()) {
         return false;
     }
-    const QString& outputFormat = getOutputSupportedFormats()[compressionOptions.format];
-    bool convert = compressionOptions.format != 0 && this->getFormat().compare(outputFormat, Qt::CaseInsensitive) != 0;
+    const bool inputIsBmp = this->getFormat() == "bmp";
+    QString outputFormat = inputIsBmp && compressionOptions.format == 0 ? QString("JPG") : getOutputSupportedFormats()[compressionOptions.format];
+    bool convert = inputIsBmp || (compressionOptions.format != 0 && this->getFormat().compare(outputFormat, Qt::CaseInsensitive) != 0);
     FileDates inputFileDates = {
         inputFileInfo.fileTime(QFile::FileBirthTime),
         inputFileInfo.fileTime(QFile::FileModificationTime),
@@ -123,7 +124,8 @@ bool CImage::preview(const CompressionOptions& compressionOptions) const
     CCSParameters r_parameters = this->getCSParameters(compressionOptions);
     if (convert) {
         QImage imageToBeConverted = QImage(inputFullPath);
-        bool conversionSuccess = imageToBeConverted.save(outputFullPath, getOutputSupportedFormats().at(compressionOptions.format).toLower().toUtf8().constData(), 100);
+        QByteArray outputFormatBytes = outputFormat.toLower().toUtf8();
+        bool conversionSuccess = imageToBeConverted.save(outputFullPath, outputFormatBytes.constData(), 100);
         if (!conversionSuccess) {
             return false;
         }
@@ -144,8 +146,9 @@ bool CImage::compress(const CompressionOptions& compressionOptions)
     QString inputFullPath = this->getFullPath();
     QString suffix = compressionOptions.suffix;
     QFileInfo inputFileInfo = QFileInfo(inputFullPath);
-    QString outputFormat = getOutputSupportedFormats()[compressionOptions.format];
-    bool convert = compressionOptions.format != 0 && this->format.compare(outputFormat, Qt::CaseInsensitive) != 0;
+    const bool inputIsBmp = this->format == "bmp";
+    QString outputFormat = inputIsBmp && compressionOptions.format == 0 ? QString("JPG") : getOutputSupportedFormats()[compressionOptions.format];
+    bool convert = inputIsBmp || (compressionOptions.format != 0 && this->format.compare(outputFormat, Qt::CaseInsensitive) != 0);
     this->additionalInfo = "";
     if (!inputFileInfo.exists()) {
         qCritical() << "File" << inputFullPath << "does not exist.";
@@ -153,8 +156,8 @@ bool CImage::compress(const CompressionOptions& compressionOptions)
         return false;
     }
     QString outputSuffix = this->extension;
-    if (compressionOptions.format != 0) {
-        outputSuffix = getOutputSupportedFormats()[compressionOptions.format].toLower();
+    if (compressionOptions.format != 0 || inputIsBmp) {
+        outputSuffix = outputFormat.toLower();
     }
 
     QString fullFileName = inputFileInfo.completeBaseName() + suffix + "." + outputSuffix;
@@ -198,9 +201,17 @@ bool CImage::compress(const CompressionOptions& compressionOptions)
     tempFile.close();
 
     QString inputCopyFile = inputFullPath;
-    if (convert) {
+    bool usedPreviewCache = false;
+    const QString previewPath = this->getTemporaryPreviewFullPath(compressionOptions.optionsHash);
+    if (!previewPath.isEmpty() && QFileInfo::exists(previewPath)) {
+        QFile::remove(tempFileFullPath);
+        usedPreviewCache = QFile::copy(previewPath, tempFileFullPath);
+    }
+
+    if (!usedPreviewCache && convert) {
         QImage imageToBeConverted = QImage(inputFullPath);
-        bool conversionSuccess = imageToBeConverted.save(tempFileFullPath, getOutputSupportedFormats().at(compressionOptions.format).toLower().toUtf8().constData(), 100);
+        QByteArray outputFormatBytes = outputFormat.toLower().toUtf8();
+        bool conversionSuccess = imageToBeConverted.save(tempFileFullPath, outputFormatBytes.constData(), 100);
         this->additionalInfo = QIODevice::tr("File conversion failed");
         if (!conversionSuccess) {
             return false;
@@ -208,18 +219,15 @@ bool CImage::compress(const CompressionOptions& compressionOptions)
         inputFullPath = tempFileFullPath;
     }
 
-    QString previewPath = this->getTemporaryPreviewFullPath();
-    if (QFile::exists(previewPath)) {
-        if (QFile::remove(tempFileFullPath)) {
-            QFile::copy(previewPath, tempFileFullPath);
-        }
+    CCSResult result = {};
+
+    if (usedPreviewCache) {
+        result.success = true;
+    } else {
+        CCSParameters r_parameters = this->getCSParameters(compressionOptions);
+        size_t maxOutputSize = getMaxOutputSizeInBytes(compressionOptions.maxOutputSize, inputFileInfo.size());
+        result = compressionOptions.compressionMode == SIZE ? c_compress_to_size(inputFullPath.toUtf8().constData(), tempFileFullPath.toUtf8().constData(), r_parameters, maxOutputSize, true) : c_compress(inputFullPath.toUtf8().constData(), tempFileFullPath.toUtf8().constData(), r_parameters);
     }
-
-    CCSParameters r_parameters = this->getCSParameters(compressionOptions);
-
-    size_t maxOutputSize = getMaxOutputSizeInBytes(compressionOptions.maxOutputSize, inputFileInfo.size());
-
-    CCSResult result = compressionOptions.compressionMode == SIZE ? c_compress_to_size(inputFullPath.toUtf8().constData(), tempFileFullPath.toUtf8().constData(), r_parameters, maxOutputSize, true) : c_compress(inputFullPath.toUtf8().constData(), tempFileFullPath.toUtf8().constData(), r_parameters);
 
     if (result.success) {
         QFileInfo outputInfo(tempFileFullPath);
@@ -427,7 +435,13 @@ QString CImage::getHashedFullPath() const
 
 QString CImage::getTemporaryPreviewFullPath() const
 {
-    QString tempFileName = hashString(this->hashedFullPath + "." + getCompressionOptionsHash(), QCryptographicHash::Sha256);
+    return this->getTemporaryPreviewFullPath(getCompressionOptionsHash());
+}
+
+QString CImage::getTemporaryPreviewFullPath(const QString& optionsHash) const
+{
+    QString resolvedOptionsHash = optionsHash.isEmpty() ? getCompressionOptionsHash() : optionsHash;
+    QString tempFileName = hashString(this->hashedFullPath + "." + resolvedOptionsHash, QCryptographicHash::Sha256);
     QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
     QString temporaryPreviewFullPath = cacheDir + QDir::separator() + tempFileName;
     bool pathCreationSuccess = QDir(cacheDir).mkpath(cacheDir);

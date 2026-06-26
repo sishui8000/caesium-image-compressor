@@ -5,7 +5,7 @@
 #include "../utils/Utils.h"
 
 class CImage {
-    const QList<QByteArray> supportedFormats = { "png", "jpg", "jpeg", "webp", "tiff" };
+    const QList<QByteArray> supportedFormats = { "png", "jpg", "jpeg", "webp", "tiff", "bmp" };
 
 public:
     explicit CImage(const QString& path);
@@ -30,6 +30,7 @@ public:
     bool preview(const CompressionOptions& compressionOptions) const;
     QString getCompressedFullPath() const;
     QString getTemporaryPreviewFullPath() const;
+    QString getTemporaryPreviewFullPath(const QString& optionsHash) const;
     QString getPreviewFullPath() const;
     size_t getTotalPixels() const;
     QString getFormattedStatus() const;

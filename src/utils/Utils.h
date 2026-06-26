@@ -100,6 +100,7 @@ typedef struct CompressionOptions {
     QString outputPath;
     QString basePath;
     QString suffix;
+    QString optionsHash;
     int format;
     bool lossless;
     bool keepMetadata;

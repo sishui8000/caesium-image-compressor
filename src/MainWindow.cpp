@@ -278,7 +278,7 @@ void MainWindow::triggerImportFiles()
     QStringList fileList = QFileDialog::getOpenFileNames(this,
         tr("Import files..."),
         this->lastOpenedDirectory,
-        QIODevice::tr("Image Files") + " (*.jpg *.jpeg *.png *.webp *.tif *.tiff)");
+        QIODevice::tr("Image Files") + " (*.jpg *.jpeg *.png *.webp *.tif *.tiff *.bmp)");
 
     if (fileList.isEmpty()) {
         return;
@@ -622,7 +622,9 @@ void MainWindow::startCompression(bool onlyFailed)
     if (!QSettings().value("preferences/general/multithreading", true).toBool()) {
         QThreadPool::globalInstance()->setMaxThreadCount(1);
     } else {
-        int maxThreads = QSettings().value("preferences/general/multithreading_max_threads", QThread::idealThreadCount()).toInt();
+        const int idealThreads = qMax(1, QThread::idealThreadCount());
+        int maxThreads = QSettings().value("preferences/general/multithreading_max_threads", idealThreads).toInt();
+        maxThreads = qBound(1, maxThreads, qMin(idealThreads, totalImages));
         QThreadPool::globalInstance()->setMaxThreadCount(maxThreads);
     }
     QThreadPool::globalInstance()->setThreadPriority(QSettings().value("preferences/general/threads_priority", QThread::NormalPriority).value<QThread::Priority>());
@@ -688,6 +690,7 @@ CompressionOptions MainWindow::getCompressionOptions(const QString& rootFolder) 
         ui->outputFolder_LineEdit->text(),
         rootFolder,
         ui->outputSuffix_LineEdit->text(),
+        getCompressionOptionsHash(),
         ui->format_ComboBox->currentIndex(),
         ui->lossless_CheckBox->isChecked(),
         ui->keepMetadata_CheckBox->isChecked(),
