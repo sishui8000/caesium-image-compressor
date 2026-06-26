@@ -1,0 +1,219 @@
+name: Build
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - README.md
+      - LICENSE
+      - .clang-format
+      - .github/ISSUE_TEMPLATE/**
+
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache libcaesium
+        id: cache-libcaesium
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/build-Windows/libcaesium-prefix
+          key: windows-libcaesium-${{ hashFiles('**/libcaesium.conf') }}
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          aqtversion: "==3.1.*"
+          version: "6.8.2"
+          host: windows
+          target: desktop
+          arch: win64_mingw
+          modules: qtimageformats
+          tools: tools_mingw1310
+          cache: true
+
+      - name: Install Rust target
+        run: rustup target add x86_64-pc-windows-gnu
+
+      - name: Configure CMake
+        run: |
+          cmake ^
+            -DCMAKE_BUILD_TYPE=Release ^
+            -DCMAKE_PREFIX_PATH="${{ env.Qt6_Dir }}" ^
+            -G "CodeBlocks - MinGW Makefiles" ^
+            -B build-Windows
+
+      - name: Build
+        run: |
+          cmake --build build-Windows --config Release --target caesium_image_compressor
+
+      - name: Show build output
+        shell: pwsh
+        run: |
+          Get-ChildItem build-Windows -Recurse
+
+      - name: Find executable
+        id: findexe
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem build-Windows -Recurse -Filter "*.exe" |
+            Where-Object { $_.Name -eq "Caesium Image Compressor.exe" } |
+            Select-Object -First 1
+
+          if ($null -eq $exe) {
+            Write-Error "Executable not found."
+          }
+
+          echo "exe=$($exe.FullName)" >> $env:GITHUB_OUTPUT
+
+      - name: Prepare release folder
+        shell: pwsh
+        run: |
+          Remove-Item release -Recurse -Force -ErrorAction Ignore
+          New-Item release -ItemType Directory
+
+      - name: Deploy Qt
+        shell: cmd
+        run: |
+          "%Qt6_Dir%\bin\windeployqt.exe" ^
+          "${{ steps.findexe.outputs.exe }}" ^
+          --release ^
+          --compiler-runtime ^
+          --translations
+
+      - name: Copy executable
+        shell: pwsh
+        run: |
+          Copy-Item "${{ steps.findexe.outputs.exe }}" release
+
+      - name: Copy Qt files
+        shell: pwsh
+        run: |
+          $dir = Split-Path "${{ steps.findexe.outputs.exe }}"
+
+          Copy-Item "$dir\*.dll" release -Force
+
+          if(Test-Path "$dir\platforms"){
+              Copy-Item "$dir\platforms" release -Recurse
+          }
+
+          if(Test-Path "$dir\imageformats"){
+              Copy-Item "$dir\imageformats" release -Recurse
+          }
+
+          if(Test-Path "$dir\styles"){
+              Copy-Item "$dir\styles" release -Recurse
+          }
+
+          if(Test-Path "$dir\translations"){
+              Copy-Item "$dir\translations" release -Recurse
+          }
+
+      - name: Copy libcaesium
+        shell: pwsh
+        run: |
+          Get-ChildItem build-Windows -Recurse -Filter caesium.dll |
+            Copy-Item -Destination release -Force
+
+      - name: Copy WinSparkle
+        shell: pwsh
+        run: |
+          Get-ChildItem build-Windows -Recurse -Filter WinSparkle.dll |
+            Copy-Item -Destination release -Force -ErrorAction Ignore
+
+      - name: Zip portable version
+        shell: pwsh
+        run: |
+          Compress-Archive `
+            -Path release\* `
+            -DestinationPath Caesium-Windows.zip `
+            -Force
+      - name: Upload Portable Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Caesium-Windows-Portable
+          path: Caesium-Windows.zip
+
+      - name: Install Inno Setup
+        run: |
+          choco install innosetup -y
+
+      - name: Build Installer
+        shell: cmd
+        run: |
+          "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" setup.iss
+
+      - name: Find installer
+        id: installer
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -Recurse -Filter "*setup.exe" |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+
+          if($null -eq $installer){
+            Write-Error "Installer not found."
+          }
+
+          echo "file=$($installer.FullName)" >> $env:GITHUB_OUTPUT
+
+      - name: Upload Installer Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Caesium-Windows-Installer
+          path: ${{ steps.installer.outputs.file }}
+
+      - name: Generate Release Tag
+        id: tag
+        shell: pwsh
+        run: |
+          $tag = Get-Date -Format "yyyy.MM.dd-HHmm"
+
+          "release_tag=$tag" >> $env:GITHUB_OUTPUT
+
+          @"
+          ## Caesium Image Compressor
+
+          Build Time:
+          $(Get-Date)
+
+          Commit:
+          ${{ github.sha }}
+
+          Branch:
+          ${{ github.ref_name }}
+          "@ | Out-File release.txt -Encoding utf8
+
+      - name: Publish Release
+        uses: mikepenz/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.release_tag }}
+          body_path: release.txt
+          files: |
+            Caesium-Windows.zip
+            ${{ steps.installer.outputs.file }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Delete old Releases
+        uses: dev-drprasad/delete-older-releases@master
+        with:
+          keep_latest: 5
+          delete_tags: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
