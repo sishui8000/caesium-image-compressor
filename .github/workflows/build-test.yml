@@ -74,6 +74,11 @@ jobs:
 
           throw "windeployqt.exe not found"
    
+      - name: Find exe
+        shell: pwsh
+        run: |
+            Get-ChildItem build-${{ runner.os }} -Recurse *.exe | Select FullName
+   
 
 
       - name: Deploy Qt
