@@ -122,14 +122,24 @@ bool CImage::preview(const CompressionOptions& compressionOptions) const
         inputFileInfo.fileTime(QFile::FileAccessTime)
     };
     CCSParameters r_parameters = this->getCSParameters(compressionOptions);
+    QString convertedTempPath = "";
     if (convert) {
+        QTemporaryFile convertedTempFile(QDir::tempPath() + QDir::separator() + "caesium_preview_conv.XXXXXXXX." + outputFormat.toLower());
+        if (convertedTempFile.open()) {
+            convertedTempPath = convertedTempFile.fileName();
+        }
+        if (convertedTempPath.isEmpty()) {
+            return false;
+        }
+        convertedTempFile.close();
+
         QImage imageToBeConverted = QImage(inputFullPath);
         QByteArray outputFormatBytes = outputFormat.toLower().toUtf8();
-        bool conversionSuccess = imageToBeConverted.save(outputFullPath, outputFormatBytes.constData(), 100);
+        bool conversionSuccess = imageToBeConverted.save(convertedTempPath, outputFormatBytes.constData(), 100);
         if (!conversionSuccess) {
             return false;
         }
-        inputFullPath = outputFullPath;
+        inputFullPath = convertedTempPath;
     }
     size_t maxOutputSize = getMaxOutputSizeInBytes(compressionOptions.maxOutputSize, inputFileInfo.size());
 
@@ -183,6 +193,7 @@ bool CImage::compress(const CompressionOptions& compressionOptions)
     }
 
     QString tempFileFullPath = "";
+    QString convertedTempFileFullPath = "";
 
     QString outputFullPath = outputDir.absoluteFilePath(fullFileName);
     bool outputAlreadyExists = QFile(outputFullPath).exists();
@@ -209,14 +220,25 @@ bool CImage::compress(const CompressionOptions& compressionOptions)
     }
 
     if (!usedPreviewCache && convert) {
+        QTemporaryFile convertedTempFile(outputPath + QDir::separator() + inputFileInfo.completeBaseName() + "_conv.XXXXXXXX." + outputSuffix);
+        if (convertedTempFile.open()) {
+            convertedTempFileFullPath = convertedTempFile.fileName();
+        }
+        if (convertedTempFileFullPath.isEmpty()) {
+            qCritical() << "Converted temporary file is empty.";
+            this->additionalInfo = QIODevice::tr("Temporary file creation failed");
+            return false;
+        }
+        convertedTempFile.close();
+
         QImage imageToBeConverted = QImage(inputFullPath);
         QByteArray outputFormatBytes = outputFormat.toLower().toUtf8();
-        bool conversionSuccess = imageToBeConverted.save(tempFileFullPath, outputFormatBytes.constData(), 100);
+        bool conversionSuccess = imageToBeConverted.save(convertedTempFileFullPath, outputFormatBytes.constData(), 100);
         this->additionalInfo = QIODevice::tr("File conversion failed");
         if (!conversionSuccess) {
             return false;
         }
-        inputFullPath = tempFileFullPath;
+        inputFullPath = convertedTempFileFullPath;
     }
 
     CCSResult result = {};
