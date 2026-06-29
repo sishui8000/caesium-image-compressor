@@ -126,10 +126,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Caesium-Windows
-          path: Caesium-Windows.zip
+          path: package/
 
-      - name: Upload Release
-        if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: Caesium-Windows.zip
