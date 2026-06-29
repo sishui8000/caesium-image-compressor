@@ -66,8 +66,8 @@ Name: "turkish";             MessagesFile: "compiler:Languages\Turkish.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion; DestDir: "{app}"; Flags: ignoreversion
-Source: "release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "release\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]

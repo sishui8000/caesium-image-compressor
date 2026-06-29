@@ -47,6 +47,18 @@ jobs:
           tools: tools_mingw1310
           cache: true
 
+      - name: Check Qt
+ 
+        shell: pwsh
+        run: |
+         Write-Host "Qt6_Dir=$env:Qt6_Dir"
+
+         Get-Command windeployqt.exe -ErrorAction SilentlyContinue
+
+         where.exe windeployqt
+
+         Get-ChildItem Env:Qt*
+         
       - name: Install Rust target
         run: rustup target add x86_64-pc-windows-gnu --toolchain stable
 
