@@ -87,13 +87,12 @@ jobs:
           mkdir package
 
           Copy-Item `
-            build-${{ runner.os }}/src/caesium_image_compressor.exe `
+           "build-${{ runner.os }}/Caesium Image Compressor.exe" `
             package/
-
           & "$env:WINDEPLOYQT" `
             --release `
             --compiler-runtime `
-            package/caesium_image_compressor.exe
+             "package/Caesium Image Compressor.exe"
             
             
 
