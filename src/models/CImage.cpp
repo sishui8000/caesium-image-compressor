@@ -8,6 +8,7 @@
 #include <QStandardPaths>
 #include <QTemporaryFile>
 #include <cmath>
+#include <memory>
 
 CImage::CImage(const QString& path)
 {
@@ -123,15 +124,17 @@ bool CImage::preview(const CompressionOptions& compressionOptions) const
     };
     CCSParameters r_parameters = this->getCSParameters(compressionOptions);
     QString convertedTempPath = "";
+    std::unique_ptr<QTemporaryFile> convertedTempFile;
     if (convert) {
-        QTemporaryFile convertedTempFile(QDir::tempPath() + QDir::separator() + "caesium_preview_conv.XXXXXXXX." + outputFormat.toLower());
-        if (convertedTempFile.open()) {
-            convertedTempPath = convertedTempFile.fileName();
+        convertedTempFile = std::make_unique<QTemporaryFile>(QDir::tempPath() + QDir::separator() + "caesium_preview_conv.XXXXXXXX." + outputFormat.toLower());
+        convertedTempFile->setAutoRemove(false);
+        if (convertedTempFile->open()) {
+            convertedTempPath = convertedTempFile->fileName();
         }
         if (convertedTempPath.isEmpty()) {
             return false;
         }
-        convertedTempFile.close();
+        convertedTempFile->close();
 
         QImage imageToBeConverted = QImage(inputFullPath);
         QByteArray outputFormatBytes = outputFormat.toLower().toUtf8();
@@ -147,6 +150,11 @@ bool CImage::preview(const CompressionOptions& compressionOptions) const
 
     QFileInfo outputFileInfo(outputFullPath);
     CImage::setFileDates(outputFileInfo, compressionOptions.datesMap, inputFileDates);
+
+    if (!convertedTempPath.isEmpty()) {
+        QFile::remove(convertedTempPath);
+    }
+
     return result.success;
 }
 
@@ -194,6 +202,7 @@ bool CImage::compress(const CompressionOptions& compressionOptions)
 
     QString tempFileFullPath = "";
     QString convertedTempFileFullPath = "";
+    std::unique_ptr<QTemporaryFile> convertedTempFile;
 
     QString outputFullPath = outputDir.absoluteFilePath(fullFileName);
     bool outputAlreadyExists = QFile(outputFullPath).exists();
@@ -220,16 +229,17 @@ bool CImage::compress(const CompressionOptions& compressionOptions)
     }
 
     if (!usedPreviewCache && convert) {
-        QTemporaryFile convertedTempFile(outputPath + QDir::separator() + inputFileInfo.completeBaseName() + "_conv.XXXXXXXX." + outputSuffix);
-        if (convertedTempFile.open()) {
-            convertedTempFileFullPath = convertedTempFile.fileName();
+        convertedTempFile = std::make_unique<QTemporaryFile>(outputPath + QDir::separator() + inputFileInfo.completeBaseName() + "_conv.XXXXXXXX." + outputSuffix);
+        convertedTempFile->setAutoRemove(false);
+        if (convertedTempFile->open()) {
+            convertedTempFileFullPath = convertedTempFile->fileName();
         }
         if (convertedTempFileFullPath.isEmpty()) {
             qCritical() << "Converted temporary file is empty.";
             this->additionalInfo = QIODevice::tr("Temporary file creation failed");
             return false;
         }
-        convertedTempFile.close();
+        convertedTempFile->close();
 
         QImage imageToBeConverted = QImage(inputFullPath);
         QByteArray outputFormatBytes = outputFormat.toLower().toUtf8();
@@ -314,6 +324,10 @@ bool CImage::compress(const CompressionOptions& compressionOptions)
     } else {
         this->additionalInfo = result.error_message;
         qCritical() << "Compression result for i:" << inputFullPath << "and o: " << tempFileFullPath << "is false. Error:" << result.error_message;
+    }
+
+    if (!convertedTempFileFullPath.isEmpty()) {
+        QFile::remove(convertedTempFileFullPath);
     }
 
     return result.success;
