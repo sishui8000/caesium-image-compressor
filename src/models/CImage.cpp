@@ -229,7 +229,7 @@ bool CImage::compress(const CompressionOptions& compressionOptions)
     }
 
     if (!usedPreviewCache && convert) {
-        convertedTempFile = std::make_unique<QTemporaryFile>(outputPath + QDir::separator() + inputFileInfo.completeBaseName() + "_conv.XXXXXXXX." + outputSuffix);
+        convertedTempFile = std::make_unique<QTemporaryFile>(QDir::tempPath() + QDir::separator() + inputFileInfo.completeBaseName() + "_conv.XXXXXXXX." + outputSuffix);
         convertedTempFile->setAutoRemove(false);
         if (convertedTempFile->open()) {
             convertedTempFileFullPath = convertedTempFile->fileName();
@@ -246,6 +246,7 @@ bool CImage::compress(const CompressionOptions& compressionOptions)
         bool conversionSuccess = imageToBeConverted.save(convertedTempFileFullPath, outputFormatBytes.constData(), 100);
         this->additionalInfo = QIODevice::tr("File conversion failed");
         if (!conversionSuccess) {
+            QFile::remove(convertedTempFileFullPath);
             return false;
         }
         inputFullPath = convertedTempFileFullPath;
