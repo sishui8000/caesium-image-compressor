@@ -94,7 +94,19 @@ jobs:
             --compiler-runtime `
              "package/Caesium Image Compressor.exe"
             
-            
+             $dlls = Get-ChildItem build-${{ runner.os }} -Recurse -Filter *.dll
+
+             foreach($dll in $dlls)
+             {
+             if(
+                $dll.Name -eq "caesium.dll" -or
+                $dll.Name -eq "WinSparkle.dll"
+               )
+           {
+              Copy-Item $dll.FullName package -Force
+              Write-Host "Copied $($dll.Name)"
+              }
+                 }            
 
       - name: Copy MinGW Runtime
         shell: pwsh
