@@ -84,13 +84,9 @@ jobs:
           New-Item release -ItemType Directory
 
       - name: Deploy Qt
-        shell: cmd
+        shell: pwsh
         run: |
-          "%Qt6_Dir%\bin\windeployqt.exe" ^
-          "${{ steps.findexe.outputs.exe }}" ^
-          --release ^
-          --compiler-runtime ^
-          --translations
+          & "$env:Qt6_Dir\bin\windeployqt.exe" "${{ steps.findexe.outputs.exe }}" --release --compiler-runtime --translations
 
       - name: Copy executable
         shell: pwsh
