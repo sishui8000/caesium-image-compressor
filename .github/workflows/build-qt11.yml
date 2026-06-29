@@ -64,7 +64,7 @@ jobs:
 
  
       - name: Configure CMake
-        run: cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{ env.Qt6_Dir }}" -G "MinGW Makefiles" -B build-Windows
+        run: cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR" -G "MinGW Makefiles" -B build-Windows
 
       - name: Build
         run: |
@@ -125,11 +125,11 @@ jobs:
       - name: Deploy Qt
         shell: pwsh
         run: |
-          & "${{ steps.qtdeploy.outputs.exe }}" `
-          "release\Caesium Image Compressor.exe" `
-          --release `
-          --compiler-runtime `
-          --translations
+          & "$env:QT_ROOT_DIR\bin\windeployqt.exe" `
+           "release\Caesium Image Compressor.exe" `
+           --release `
+           --compiler-runtime `
+           --translations
 
       - name: Copy libcaesium
         shell: pwsh
