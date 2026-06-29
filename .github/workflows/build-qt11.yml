@@ -58,7 +58,7 @@ jobs:
          where.exe windeployqt
 
          Get-ChildItem Env:Qt*
-         
+
       - name: Install Rust target
         run: rustup target add x86_64-pc-windows-gnu --toolchain stable
 
@@ -95,14 +95,41 @@ jobs:
         run: |
           Copy-Item "${{ steps.findexe.outputs.exe }}" release
 
+
+
+      - name: Locate windeployqt
+        id: qtdeploy
+        shell: pwsh
+        run: |
+          $paths = @(
+          "$env:Qt6_Dir\bin\windeployqt.exe",
+          "$env:Qt6_Dir\..\Tools\mingw1310_64\bin\windeployqt.exe"
+           )
+
+           foreach ($p in $paths) {
+           if (Test-Path $p) {
+            "exe=$((Resolve-Path $p).Path)" >> $env:GITHUB_OUTPUT
+            exit 0
+           }
+           }
+
+          $found = Get-ChildItem "C:\" -Recurse -Filter windeployqt.exe -ErrorAction SilentlyContinue |
+          Select-Object -First 1
+
+          if ($found) {
+          "exe=$($found.FullName)" >> $env:GITHUB_OUTPUT
+          } else {
+          throw "windeployqt.exe not found"
+          }
+
       - name: Deploy Qt
         shell: pwsh
         run: |
-          & "$env:Qt6_Dir\bin\windeployqt.exe" `
-            "release\Caesium Image Compressor.exe" `
-            --release `
-            --compiler-runtime `
-            --translations
+          & "${{ steps.qtdeploy.outputs.exe }}" `
+          "release\Caesium Image Compressor.exe" `
+          --release `
+          --compiler-runtime `
+          --translations
 
       - name: Copy libcaesium
         shell: pwsh
